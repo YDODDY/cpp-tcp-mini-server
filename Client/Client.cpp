@@ -2,6 +2,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <cstring>
+#include <string>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -48,13 +49,10 @@ int main()
 
     std::cout << "Client socket created.\n";
 
-    // client 접속할 server 주소 만들기 
-    // -> client 는 어디에 접속할 것인지 주소를 정확히 알아야 함 
     sockaddr_in serverAddress{};
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(5000);
-    // 127.0.0.1 -> loopback address : 이 컴퓨터 자기 자신 
-    // 사람이 읽는 127.0.0.1 문자열을 socket 이 사용할 수 있는 주소 형태로 변환하는 함수 
+
     inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
 
     // connect 
@@ -69,27 +67,48 @@ int main()
         return 1;
     }
     std::cout << "Connected to server!\n";
+    
 
+    // [4byte Length]   [Payload]
+    // [00][00][00][03] [A][A][A]
 
-    //send 
-
-    const char* message = "ABC";
-    // strlen 반환형이 size_t 인데 send 길이 인자는 int 니까 명시적으로 변환하는게 깔끔함
-    int messageLength = static_cast<int>(strlen(message));
-
-    // send 는 실패했을 때 SOCKET_ERROR 를 반환
-    // 성공하면 실제 몇 byte 를 전송하도록 받아들였는지 값을 반환함 (처리된 byte 수)
-    int sendBytes = send(clientSocket, message, messageLength, 0);
-    // 실패 체크 
-    if (sendBytes == SOCKET_ERROR)
+    // 4-byte length prefix
+    std::string messages[] =
     {
-        std::cout << "send failed : " << WSAGetLastError() << '\n';
-        closesocket(clientSocket);
-        WSACleanup();
-        return 1;
+        "AAA",
+        "HELLO",
+        "C"
+    };
+
+    for (const std::string& message : messages)
+    {
+        uint32_t messageLength = static_cast<uint32_t>(message.size());
+        uint32_t networkLength = htonl(messageLength);
+     
+        int sentLengthBytes = send(clientSocket,
+            reinterpret_cast<const char*>(&networkLength), sizeof(networkLength), 0);
+
+        if (sentLengthBytes == SOCKET_ERROR)
+        {
+                std::cout<< "Length send failed for message: "
+                << message
+                << "\nWSA Error: "
+                << WSAGetLastError()
+                << '\n';
+            break;
+        }
+
+        int sentPayloadBytes = send(clientSocket, message.c_str(), 
+            static_cast<int>(message.size()), 0);
+        if (sentPayloadBytes == SOCKET_ERROR)
+        {
+            std::cout << "payload send failed : " << WSAGetLastError() << '\n';
+            break;
+        }
+
+        std::cout << "Sent message : " << message << " (" << messageLength << " bytes)\n";
     }
 
-    std::cout << "Sent " << sendBytes << " bytes : " << message << '\n';
 
     closesocket(clientSocket);
     WSACleanup();
