@@ -4,6 +4,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <vector>
+#include "C:\Users\USER\Desktop\Dev\cpp\tcpMiniServer\cpp-tcp-mini-server\Common\Protocol.h"
+
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -114,29 +116,58 @@ int main()
 			uint32_t networkLength;
 			memcpy(&networkLength, receiveBuffer.data(), sizeof(uint32_t));
 			// host byte order 로 변환해서 length 알아냄 
-			uint32_t messageLength = ntohl(networkLength);
+			uint32_t payloadLength = ntohl(networkLength);
 
 			// 필요한 전체 크기 : 4byte + payload 
-			size_t fullMessageSize = sizeof(uint32_t) + messageLength;
+			size_t fullMessageSize = sizeof(uint32_t) + sizeof(MessageType) + payloadLength;
 			// 필요한 byte 아직 다 못받았으면 다음 recv 기다리기 
 			if (receiveBuffer.size() < fullMessageSize)
 			{
 				break;
 			}
 
+			// type 
+			uint8_t rawType;
+			memcpy(&rawType, receiveBuffer.data() + sizeof(uint32_t), sizeof(rawType));
+			MessageType messageType = static_cast<MessageType>(rawType);
+
 			// 완성시 payload 추출
-			std::string payload(receiveBuffer.data() + sizeof(uint32_t),
-				messageLength);
+			std::string payload(receiveBuffer.data() + sizeof(uint32_t) 
+				+ sizeof(MessageType), payloadLength);
 			std::cout << "Message received : " << payload << '\n';
 
 			// 처리한 메세지는 receiveBuffer 에서 제거
 			receiveBuffer.erase(
 			receiveBuffer.begin(), receiveBuffer.begin() + fullMessageSize);
 
+			switch (messageType)
+			{
+			case MessageType::Login:
+				std::cout
+					<< "[LOGIN] Player: "
+					<< payload
+					<< '\n';
+				break;
 
-			std::cout << "Buffered bytes: "
-				<< receiveBuffer.size()
-				<< '\n';
+			case MessageType::Chat:
+				std::cout
+					<< "[CHAT] "
+					<< payload
+					<< '\n';
+				break;
+
+			case MessageType::Move:
+				std::cout
+					<< "[MOVE] Position: "
+					<< payload
+					<< '\n';
+				break;
+
+			default:
+				std::cout
+					<< "[UNKNOWN MESSAGE TYPE]\n";
+				break;
+			}
 		}
 		
 	}
